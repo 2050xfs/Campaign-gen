@@ -22,6 +22,17 @@ async function getAssetBlob(asset: AssetState): Promise<{ blob: Blob; filename: 
   return { blob, filename };
 }
 
+export const downloadSingleAsset = async (asset: AssetState) => {
+    const { blob, filename } = await getAssetBlob(asset);
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(link.href);
+};
+
 export const downloadZip = async (assets: AssetState[]) => {
   const zip = new JSZip();
   

@@ -1,6 +1,8 @@
-import React from 'react';
+
+import React, { useState, useMemo } from 'react';
 import { AssetState } from '../types';
 import { Loader } from './Loader';
+import { downloadZip, downloadSingleAsset } from '../utils/downloadUtils';
 
 const CloseIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
   <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" {...props}>
@@ -26,50 +28,67 @@ interface LibrarySidebarProps {
   isOpen: boolean;
   onClose: () => void;
   onRemove: (assetId: string) => void;
-  onDownloadAll: () => void;
   onBulkRemoveBackground: () => void;
   isBulkProcessing: boolean;
 }
 
-const handleDownloadSingle = async (asset: AssetState) => {
-    const url = asset.videoUrl || asset.imageUrl;
-    const response = await fetch(url);
-    const blob = await response.blob();
-    const link = document.createElement('a');
-    link.href = URL.createObjectURL(blob);
-    const fileExtension = asset.videoUrl ? 'mp4' : asset.mimeType.split('/')[1] || 'png';
-    link.download = `${asset.idea.section.replace(/\s+/g, '_').toLowerCase()}.${fileExtension}`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(link.href);
-}
+export const LibrarySidebar: React.FC<LibrarySidebarProps> = ({ assets, isOpen, onClose, onRemove, onBulkRemoveBackground, isBulkProcessing }) => {
+  const [filter, setFilter] = useState<'all' | 'image' | 'video'>('all');
+  const [searchTerm, setSearchTerm] = useState('');
 
+  const filteredAssets = useMemo(() => {
+    return assets.filter(asset => {
+        const typeMatch = filter === 'all' ||
+            (filter === 'image' && !asset.videoUrl) ||
+            (filter === 'video' && !!asset.videoUrl);
+        
+        const searchMatch = !searchTerm || 
+            asset.idea.section.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            asset.idea.description.toLowerCase().includes(searchTerm.toLowerCase());
 
-export const LibrarySidebar: React.FC<LibrarySidebarProps> = ({ assets, isOpen, onClose, onRemove, onDownloadAll, onBulkRemoveBackground, isBulkProcessing }) => {
-  const imageAssetsCount = assets.filter(a => !a.videoUrl).length;
+        return typeMatch && searchMatch;
+    });
+  }, [assets, filter, searchTerm]);
+  
+  const imageAssetsCount = filteredAssets.filter(a => !a.videoUrl).length;
     
   return (
     <>
       <div 
-        className={`fixed inset-0 bg-black/60 z-40 transition-opacity ${isOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
+        className={`fixed inset-0 bg-black/30 backdrop-blur-sm z-40 transition-opacity ${isOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
         onClick={onClose}
       />
-      <div className={`fixed top-0 right-0 h-full w-full max-w-md bg-[#1E293B] shadow-2xl z-50 transform transition-transform ${isOpen ? 'translate-x-0' : 'translate-x-full'}`}>
+      <div className={`fixed top-0 right-0 h-full w-full max-w-md glass-surface shadow-2xl z-50 transform transition-transform duration-500 ease-in-out ${isOpen ? 'translate-x-0' : 'translate-x-full'}`}>
         <div className="flex flex-col h-full">
-          <header className="flex items-center justify-between p-4 border-b border-gray-700/50 flex-shrink-0">
-            <h2 className="text-xl font-bold text-teal-300">Asset Library</h2>
-            <button onClick={onClose} className="p-1 rounded-full text-gray-400 hover:bg-gray-700 hover:text-white">
+          <header className="flex items-center justify-between p-4 border-b border-[var(--border-glass)] flex-shrink-0">
+            <h2 className="text-xl font-bold text-[var(--accent-cyan)]">Asset Library</h2>
+            <button onClick={onClose} className="p-1 rounded-full text-[var(--text-secondary)] hover:bg-white/10 hover:text-white">
               <CloseIcon className="h-6 w-6" />
             </button>
           </header>
           
           {assets.length > 0 ? (
             <>
+              <div className="p-4 border-b border-[var(--border-glass)] flex-shrink-0 space-y-3">
+                    <input 
+                        type="text" 
+                        placeholder="Search assets..."
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                        className="w-full p-2 rounded-lg bg-white/5 border border-transparent text-sm text-[var(--text-primary)] placeholder-[var(--text-secondary)]/70 focus:border-[var(--accent-cyan)]/50 focus:ring-0"
+                    />
+                    <div className="flex items-center gap-2">
+                        <span className="text-sm font-medium text-[var(--text-secondary)]">Show:</span>
+                        <button onClick={() => setFilter('all')} className={`px-3 py-1 text-xs font-medium rounded-full transition-colors ${filter === 'all' ? 'bg-[var(--primary-blue)] text-white' : 'bg-white/10 hover:bg-white/20 text-[var(--text-secondary)]'}`}>All</button>
+                        <button onClick={() => setFilter('video')} className={`px-3 py-1 text-xs font-medium rounded-full transition-colors ${filter === 'video' ? 'bg-[var(--primary-blue)] text-white' : 'bg-white/10 hover:bg-white/20 text-[var(--text-secondary)]'}`}>With Video</button>
+                        <button onClick={() => setFilter('image')} className={`px-3 py-1 text-xs font-medium rounded-full transition-colors ${filter === 'image' ? 'bg-[var(--primary-blue)] text-white' : 'bg-white/10 hover:bg-white/20 text-[var(--text-secondary)]'}`}>Images Only</button>
+                    </div>
+                </div>
+
               <div className="flex-grow overflow-y-auto p-4 space-y-4">
-                {assets.map(asset => (
-                  <div key={asset.id} className="flex items-center gap-4 bg-slate-800/50 p-2 rounded-lg">
-                    <div className="relative w-16 h-16 bg-gray-900 rounded-md flex-shrink-0 flex items-center justify-center">
+                {filteredAssets.map(asset => (
+                  <div key={asset.id} className="flex items-center gap-4 bg-white/5 hover:bg-white/10 p-2 rounded-lg transition-colors">
+                    <div className="relative w-16 h-16 bg-black/20 rounded-md flex-shrink-0 flex items-center justify-center">
                         {asset.videoUrl ? (
                              <video src={asset.videoUrl} loop muted autoPlay playsInline className="max-h-full max-w-full object-contain rounded-md" />
                         ) : (
@@ -82,31 +101,31 @@ export const LibrarySidebar: React.FC<LibrarySidebarProps> = ({ assets, isOpen, 
                         )}
                     </div>
                     <div className="flex-grow overflow-hidden">
-                      <p className="text-sm font-semibold text-gray-200 truncate">{asset.idea.section}</p>
-                      <p className="text-xs text-gray-500 truncate">{asset.idea.description}</p>
+                      <p className="text-sm font-semibold text-[var(--text-primary)] truncate">{asset.idea.section}</p>
+                      <p className="text-xs text-[var(--text-secondary)] truncate">{asset.idea.description}</p>
                     </div>
                     <div className="flex-shrink-0 flex items-center gap-1">
-                       <button onClick={() => handleDownloadSingle(asset)} className="p-2 text-gray-400 hover:text-blue-400" aria-label="Download asset">
+                       <button onClick={() => downloadSingleAsset(asset)} className="p-2 text-[var(--text-secondary)] hover:text-blue-400" aria-label="Download asset">
                            <DownloadIcon className="h-5 w-5" />
                        </button>
-                       <button onClick={() => onRemove(asset.id)} className="p-2 text-gray-400 hover:text-red-400" aria-label="Remove asset from library">
+                       <button onClick={() => onRemove(asset.id)} className="p-2 text-[var(--text-secondary)] hover:text-red-400" aria-label="Remove asset from library">
                            <TrashIcon className="h-5 w-5" />
                        </button>
                     </div>
                   </div>
                 ))}
               </div>
-              <footer className="p-4 border-t border-gray-700/50 flex-shrink-0 space-y-2">
+              <footer className="p-4 border-t border-[var(--border-glass)] flex-shrink-0 space-y-2">
                 <button 
-                  onClick={onDownloadAll}
-                  className="w-full inline-flex justify-center items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                  onClick={() => downloadZip(filteredAssets)}
+                  className="w-full inline-flex justify-center items-center px-4 py-2 border border-transparent text-sm font-medium rounded-lg shadow-sm text-white bg-[var(--primary-blue)] hover:bg-[var(--primary-blue-hover)] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[var(--primary-blue)]"
                 >
-                  Download All (.zip)
+                  Download Filtered ({filteredAssets.length})
                 </button>
                 <button 
                   onClick={onBulkRemoveBackground}
                   disabled={isBulkProcessing || imageAssetsCount === 0}
-                  className="w-full inline-flex justify-center items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-cyan-600 hover:bg-cyan-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-cyan-500 disabled:bg-gray-500 disabled:cursor-not-allowed transition-all"
+                  className="w-full inline-flex justify-center items-center px-4 py-2 border border-transparent text-sm font-semibold rounded-lg shadow-sm text-slate-900 bg-[var(--accent-cyan)] hover:brightness-110 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[var(--accent-cyan)] disabled:bg-gray-500/20 disabled:text-gray-400 disabled:cursor-not-allowed transition-all"
                 >
                   {isBulkProcessing ? <Loader size="small" /> : null}
                   {isBulkProcessing ? 'Processing...' : `Remove Backgrounds (${imageAssetsCount})`}
@@ -116,7 +135,7 @@ export const LibrarySidebar: React.FC<LibrarySidebarProps> = ({ assets, isOpen, 
           ) : (
             <div className="flex-grow flex items-center justify-center text-center p-4">
               <div>
-                <p className="text-gray-400">Your library is empty.</p>
+                <p className="text-[var(--text-secondary)]">Your library is empty.</p>
                 <p className="text-sm text-gray-500">Add generated assets to see them here.</p>
               </div>
             </div>

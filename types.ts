@@ -1,24 +1,23 @@
-
 import { v4 as uuidv4 } from 'uuid';
-
-// Global declaration for window.aistudio
-// FIX: Defined an AIStudio interface and used it for window.aistudio. This resolves
-// the "Subsequent property declarations must have the same type" error by ensuring
-// consistency with other declarations that expect the 'AIStudio' type.
-interface AIStudio {
-  hasSelectedApiKey: () => Promise<boolean>;
-  openSelectKey: () => Promise<void>;
-}
-
-declare global {
-  interface Window {
-    aistudio?: AIStudio;
-  }
-}
 
 export interface ImageFile {
   base64: string;
   mimeType: string;
+}
+
+export interface GuidedBrief {
+    keywords: string;
+    styles: string[];
+    colors: string[];
+    instructions: string;
+}
+
+export interface DesignAnalysis {
+    score: number;
+    detectedStyle: string;
+    colorPalette: string[];
+    critique: string;
+    suggestions: string[];
 }
 
 export interface AssetIdea {
@@ -42,10 +41,15 @@ export interface AssetState {
   isRemovingBackground?: boolean;
 }
 
+export interface GenerationResult {
+    analysis: DesignAnalysis;
+    ideas: AssetIdea[];
+}
+
 export type GenerateInput = 
-  | { type: 'text'; value: string }
-  | { type: 'file'; file: File; tips?: string }
-  | { type: 'url'; url: string };
+  | { type: 'text'; brief: GuidedBrief }
+  | { type: 'file'; file: File; brief: GuidedBrief }
+  | { type: 'url'; url: string; brief: GuidedBrief };
 
 // Helper function to create a placeholder AssetIdea
 export const createPlaceholderIdea = (): AssetIdea => ({
@@ -55,3 +59,15 @@ export const createPlaceholderIdea = (): AssetIdea => ({
     prompt: '',
     animationPrompt: '',
 });
+
+// Global declaration for window.aistudio
+declare global {
+  interface AIStudio {
+    hasSelectedApiKey: () => Promise<boolean>;
+    openSelectKey: () => Promise<void>;
+  }
+
+  interface Window {
+    aistudio?: AIStudio;
+  }
+}

@@ -10,8 +10,44 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
     <style>
+      :root {
+        --bg-navy: #0F131D; /* hsl(220, 25%, 8%) */
+        --accent-cyan: #17F5F5; /* hsl(180, 95%, 55%) */
+        --primary-blue: #406FF3; /* hsl(220, 85%, 60%) */
+        --primary-blue-hover: #5A81F4;
+        --text-primary: #E2E8F0;
+        --text-secondary: #94A3B8;
+        --surface-glass: rgba(255, 255, 255, 0.05);
+        --border-glass: rgba(255, 255, 255, 0.1);
+      }
       body {
         font-family: 'Inter', sans-serif;
+        background-color: var(--bg-navy);
+        color: var(--text-primary);
+        background-image: radial-gradient(circle at top left, rgba(64, 111, 243, 0.1), transparent 30%),
+                          radial-gradient(circle at bottom right, rgba(23, 245, 245, 0.08), transparent 30%);
+      }
+      .glass-surface {
+        background-color: var(--surface-glass);
+        backdrop-filter: blur(16px);
+        -webkit-backdrop-filter: blur(16px);
+        border: 1px solid var(--border-glass);
+        box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.2);
+      }
+      /* Animations */
+      @keyframes fadeIn {
+        from { opacity: 0; }
+        to { opacity: 1; }
+      }
+      @keyframes slideUp {
+          from { transform: translateY(20px); }
+          to { transform: translateY(0); }
+      }
+      .fade-in {
+          animation: fadeIn 0.5s cubic-bezier(0.25, 1, 0.5, 1) forwards;
+      }
+      .fade-slide-up {
+          animation: fadeIn 0.5s cubic-bezier(0.25, 1, 0.5, 1) forwards, slideUp 0.5s cubic-bezier(0.25, 1, 0.5, 1) forwards;
       }
     </style>
   <script type="importmap">
@@ -27,7 +63,7 @@
 }
 </script>
 </head>
-  <body class="bg-[#0F172A]">
+  <body>
     <div id="root"></div>
     <script type="module" src="/index.tsx"></script>
   </body>

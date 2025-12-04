@@ -10,11 +10,11 @@ interface LayoutSwitcherProps {
 
 export const LayoutSwitcher: React.FC<LayoutSwitcherProps> = ({ currentLayout, onLayoutChange }) => {
   return (
-    <div className="flex items-center bg-slate-800/50 rounded-lg p-1">
+    <div className="flex items-center glass-surface rounded-full p-1">
       <button
         onClick={() => onLayoutChange('grid')}
-        className={`p-2 rounded-md transition-colors ${
-          currentLayout === 'grid' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-white'
+        className={`p-2 rounded-full transition-colors ${
+          currentLayout === 'grid' ? 'bg-[var(--primary-blue)] text-white' : 'text-[var(--text-secondary)] hover:text-white'
         }`}
         aria-label="Grid view"
       >
@@ -22,8 +22,8 @@ export const LayoutSwitcher: React.FC<LayoutSwitcherProps> = ({ currentLayout, o
       </button>
       <button
         onClick={() => onLayoutChange('table')}
-        className={`p-2 rounded-md transition-colors ${
-          currentLayout === 'table' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-white'
+        className={`p-2 rounded-full transition-colors ${
+          currentLayout === 'table' ? 'bg-[var(--primary-blue)] text-white' : 'text-[var(--text-secondary)] hover:text-white'
         }`}
         aria-label="List view"
       >

@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { AssetIdea, AssetState } from '../types';
 import { Loader } from './Loader';
@@ -35,23 +36,26 @@ export const AssetCard: React.FC<AssetCardProps> = ({ idea, asset, onGenerate, o
     const renderAssetContent = () => {
         if (!asset || asset.status === 'pending') {
             return (
-                <div className="w-full h-full bg-gray-900/50 flex flex-col items-center justify-center p-4 text-center">
+                <div className="w-full h-full bg-black/20 flex flex-col items-center justify-center p-4 text-center">
                     <button
                         onClick={() => onGenerate(idea)}
-                        className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors text-sm font-semibold"
+                        className="px-4 py-2 bg-[var(--primary-blue)] text-white rounded-lg hover:bg-[var(--primary-blue-hover)] transition-all duration-300 transform hover:scale-105 text-sm font-semibold"
                     >
                         Generate Asset
                     </button>
-                    <p className="text-xs text-gray-500 mt-2">Click to generate this visual</p>
+                    <p className="text-xs text-[var(--text-secondary)] mt-2">Click to generate this visual</p>
                 </div>
             );
         }
 
         if (asset.status === 'generating') {
             return (
-                <div className="w-full h-full bg-gray-900/50 flex flex-col items-center justify-center p-4">
+                <div className="relative w-full h-full bg-black/20 flex flex-col items-center justify-center p-4">
+                    {asset.imageUrl && (
+                        <img src={asset.imageUrl} alt={idea.section} className="absolute inset-0 w-full h-full object-cover opacity-30"/>
+                    )}
                     <Loader size="medium" />
-                    <p className="text-sm text-gray-400 mt-2">Generating...</p>
+                    <p className="text-sm text-[var(--text-secondary)] mt-2 z-10">{asset.imageUrl ? 'Generating Animation...' : 'Generating Image...'}</p>
                 </div>
             );
         }
@@ -72,16 +76,28 @@ export const AssetCard: React.FC<AssetCardProps> = ({ idea, asset, onGenerate, o
         }
 
         if (asset.status === 'completed') {
-            return asset.videoUrl ? (
-                <video src={asset.videoUrl} loop muted autoPlay playsInline className="w-full h-full object-cover" />
-            ) : (
+            if (asset.videoUrl) {
+                return (
+                    <div className="grid grid-cols-2 w-full h-full">
+                        <div className="relative w-full h-full bg-black/10">
+                            <img src={asset.imageUrl} alt={`${idea.section} (Static)`} className="w-full h-full object-cover" />
+                            <div className="absolute bottom-0 left-0 bg-black/60 text-white text-xs px-2 py-0.5 rounded-tr-md">IMAGE</div>
+                        </div>
+                         <div className="relative w-full h-full bg-black/10">
+                            <video src={asset.videoUrl} loop muted autoPlay playsInline className="w-full h-full object-cover" />
+                            <div className="absolute bottom-0 left-0 bg-black/60 text-white text-xs px-2 py-0.5 rounded-tr-md">VIDEO</div>
+                        </div>
+                    </div>
+                );
+            }
+             return (
                 <img src={asset.imageUrl} alt={idea.section} className="w-full h-full object-cover" />
             );
         }
     };
 
     return (
-        <div className="bg-slate-800/50 rounded-lg overflow-hidden shadow-lg border border-gray-700/50 flex flex-col">
+        <div className="glass-surface rounded-2xl overflow-hidden shadow-lg flex flex-col transition-all duration-300 ease-in-out hover:-translate-y-2 hover:border-[var(--accent-cyan)]/30">
             <div className="relative aspect-square w-full">
                 {renderAssetContent()}
                 {isProcessing && (
@@ -92,14 +108,14 @@ export const AssetCard: React.FC<AssetCardProps> = ({ idea, asset, onGenerate, o
             </div>
             <div className="p-4 flex-grow flex flex-col justify-between">
                 <div>
-                    <h3 className="font-bold text-gray-100">{idea.section}</h3>
-                    <p className="text-sm text-gray-400 mt-1 line-clamp-2">{idea.description}</p>
+                    <h3 className="font-bold text-[var(--text-primary)]">{idea.section}</h3>
+                    <p className="text-sm text-[var(--text-secondary)] mt-1 line-clamp-2">{idea.description}</p>
                 </div>
                 <div className="flex items-center justify-end gap-2 mt-4">
                      <button
                         onClick={() => asset && onToggleBookmark(asset.id)}
                         disabled={!isGenerated}
-                        className="p-2 rounded-full text-gray-400 hover:text-yellow-400 disabled:text-gray-600 disabled:cursor-not-allowed transition-colors"
+                        className="p-2 rounded-full text-[var(--text-secondary)] hover:text-[var(--accent-cyan)] disabled:text-gray-600 disabled:cursor-not-allowed transition-colors"
                         aria-label="Bookmark asset"
                     >
                         <BookmarkIcon filled={asset?.isBookmarked} className="h-5 w-5" />
@@ -107,23 +123,23 @@ export const AssetCard: React.FC<AssetCardProps> = ({ idea, asset, onGenerate, o
                     <button
                         onClick={() => asset && onRemoveBackground(asset.id)}
                         disabled={!isGenerated || !!asset.videoUrl || isProcessing}
-                        className="p-2 rounded-full text-gray-400 hover:text-cyan-400 disabled:text-gray-600 disabled:cursor-not-allowed transition-colors"
+                        className="p-2 rounded-full text-[var(--text-secondary)] hover:text-cyan-400 disabled:text-gray-600 disabled:cursor-not-allowed transition-colors"
                         aria-label="Remove background"
                     >
                         <SparklesIcon className="h-5 w-5" />
                     </button>
                     <button
                         onClick={() => asset && onEdit(asset)}
-                        disabled={!isGenerated || !!asset.videoUrl || isProcessing}
-                        className="p-2 rounded-full text-gray-400 hover:text-teal-400 disabled:text-gray-600 disabled:cursor-not-allowed transition-colors"
+                        disabled={!isGenerated || isProcessing}
+                        className="p-2 rounded-full text-[var(--text-secondary)] hover:text-teal-400 disabled:text-gray-600 disabled:cursor-not-allowed transition-colors"
                         aria-label="Edit asset"
                     >
                         <EditIcon className="h-5 w-5" />
                     </button>
                     <button
                         onClick={() => asset && onAnimate(asset)}
-                        disabled={!isGenerated || !!asset.videoUrl || isProcessing}
-                        className="p-2 rounded-full text-gray-400 hover:text-purple-400 disabled:text-gray-600 disabled:cursor-not-allowed transition-colors"
+                        disabled={!isGenerated || isProcessing}
+                        className="p-2 rounded-full text-[var(--text-secondary)] hover:text-purple-400 disabled:text-gray-600 disabled:cursor-not-allowed transition-colors"
                         aria-label="Animate asset"
                     >
                         <AnimateIcon className="h-5 w-5" />

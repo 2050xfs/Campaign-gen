@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { AssetIdea, AssetState } from '../types';
 import { Loader } from './Loader';
@@ -38,14 +39,14 @@ export const AssetTable: React.FC<AssetTableProps> = ({ ideas, assets, onGenerat
     }
     
     return (
-        <div className="bg-slate-800/50 border border-gray-700/50 rounded-lg overflow-hidden">
-            <div className="grid grid-cols-[1fr_2fr_100px] md:grid-cols-[120px_1fr_2fr_120px] gap-4 p-4 font-bold text-gray-400 text-sm border-b border-gray-700/50">
+        <div className="glass-surface rounded-2xl overflow-hidden">
+            <div className="grid grid-cols-[1fr_2fr_100px] md:grid-cols-[120px_1fr_2fr_120px] gap-4 p-4 font-bold text-[var(--text-secondary)] text-sm border-b border-[var(--border-glass)]">
                 <div className="hidden md:block">Preview</div>
                 <div>Section</div>
                 <div>Description</div>
                 <div className="text-right">Actions</div>
             </div>
-            <div className="divide-y divide-gray-700/50">
+            <div className="divide-y divide-[var(--border-glass)]">
                 {ideas.map((idea) => {
                     const asset = assets[idea.id];
                     const isGenerated = asset && asset.status === 'completed';
@@ -53,36 +54,48 @@ export const AssetTable: React.FC<AssetTableProps> = ({ ideas, assets, onGenerat
 
                     return (
                         <div key={idea.id} className="grid grid-cols-[1fr_2fr_100px] md:grid-cols-[120px_1fr_2fr_120px] gap-4 p-4 items-center">
-                            <div className="hidden md:block aspect-square w-full bg-gray-900/50 rounded-md flex items-center justify-center">
+                            <div className="hidden md:flex aspect-square w-full bg-black/20 rounded-md items-center justify-center">
                                 {!asset ? (
-                                    <span className="text-xs text-gray-500">Not Generated</span>
+                                    <span className="text-xs text-[var(--text-secondary)]">Not Generated</span>
                                 ) : asset.status === 'generating' || isProcessing ? (
-                                    <Loader size="small" />
+                                    <div className="flex flex-col items-center">
+                                        <Loader size="small" />
+                                        <span className="text-xs text-center text-[var(--text-secondary)] mt-1">{asset.imageUrl ? 'Animating...' : 'Generating...'}</span>
+                                    </div>
                                 ) : asset.status === 'error' ? (
                                     <span className="text-xs text-red-400 p-2 text-center">Failed</span>
-                                ) : asset.videoUrl ? (
-                                    <video src={asset.videoUrl} loop muted autoPlay playsInline className="max-h-full max-w-full object-contain rounded-md" />
                                 ) : (
-                                    <img src={asset.imageUrl} alt={idea.section} className="max-h-full max-w-full object-contain rounded-md" />
+                                    <div className="flex w-full h-full gap-0.5">
+                                        <div className="w-1/2 h-full bg-black/10 rounded-l-md flex items-center justify-center">
+                                            <img src={asset.imageUrl} alt={idea.section} className="max-h-full max-w-full object-contain" />
+                                        </div>
+                                        <div className="w-1/2 h-full bg-black/10 rounded-r-md flex items-center justify-center">
+                                            {asset.videoUrl ? (
+                                                <video src={asset.videoUrl} loop muted autoPlay playsInline className="max-h-full max-w-full object-contain" />
+                                            ) : (
+                                                <div className="text-center text-[10px] text-[var(--text-secondary)] p-1">No Animation</div>
+                                            )}
+                                        </div>
+                                    </div>
                                 )}
                             </div>
                             <div>
-                                <p className="font-semibold text-gray-200">{idea.section}</p>
+                                <p className="font-semibold text-[var(--text-primary)]">{idea.section}</p>
                             </div>
                             <div>
-                                <p className="text-sm text-gray-400 line-clamp-2">{idea.description}</p>
+                                <p className="text-sm text-[var(--text-secondary)] line-clamp-2">{idea.description}</p>
                             </div>
                             <div className="flex items-center justify-end gap-1">
                                 {!asset ? (
-                                    <button onClick={() => onGenerate(idea)} className="px-2 py-1 text-xs bg-blue-600 rounded hover:bg-blue-700">Generate</button>
+                                    <button onClick={() => onGenerate(idea)} className="px-2 py-1 text-xs bg-[var(--primary-blue)] rounded hover:bg-[var(--primary-blue-hover)] transition-colors">Generate</button>
                                 ) : asset.status === 'error' ? (
-                                    <button onClick={() => onGenerate(idea)} className="px-2 py-1 text-xs bg-red-600 rounded hover:bg-red-700">Retry</button>
+                                    <button onClick={() => onGenerate(idea)} className="px-2 py-1 text-xs bg-red-600 rounded hover:bg-red-700 transition-colors">Retry</button>
                                 ) : (
                                     <>
-                                        <button onClick={() => asset && onToggleBookmark(asset.id)} disabled={!isGenerated} className="p-2 rounded-full text-gray-400 hover:text-yellow-400 disabled:text-gray-600 disabled:cursor-not-allowed transition-colors"><BookmarkIcon filled={asset?.isBookmarked} className="h-5 w-5" /></button>
-                                        <button onClick={() => asset && onRemoveBackground(asset.id)} disabled={!isGenerated || !!asset.videoUrl || isProcessing} className="p-2 rounded-full text-gray-400 hover:text-cyan-400 disabled:text-gray-600 disabled:cursor-not-allowed transition-colors"><SparklesIcon className="h-5 w-5" /></button>
-                                        <button onClick={() => asset && onEdit(asset)} disabled={!isGenerated || !!asset.videoUrl || isProcessing} className="p-2 rounded-full text-gray-400 hover:text-teal-400 disabled:text-gray-600 disabled:cursor-not-allowed transition-colors"><EditIcon className="h-5 w-5" /></button>
-                                        <button onClick={() => asset && onAnimate(asset)} disabled={!isGenerated || !!asset.videoUrl || isProcessing} className="p-2 rounded-full text-gray-400 hover:text-purple-400 disabled:text-gray-600 disabled:cursor-not-allowed transition-colors"><AnimateIcon className="h-5 w-5" /></button>
+                                        <button onClick={() => asset && onToggleBookmark(asset.id)} disabled={!isGenerated} className="p-2 rounded-full text-[var(--text-secondary)] hover:text-[var(--accent-cyan)] disabled:text-gray-600 disabled:cursor-not-allowed transition-colors"><BookmarkIcon filled={asset?.isBookmarked} className="h-5 w-5" /></button>
+                                        <button onClick={() => asset && onRemoveBackground(asset.id)} disabled={!isGenerated || !!asset.videoUrl || isProcessing} className="p-2 rounded-full text-[var(--text-secondary)] hover:text-cyan-400 disabled:text-gray-600 disabled:cursor-not-allowed transition-colors"><SparklesIcon className="h-5 w-5" /></button>
+                                        <button onClick={() => asset && onEdit(asset)} disabled={!isGenerated || isProcessing} className="p-2 rounded-full text-[var(--text-secondary)] hover:text-teal-400 disabled:text-gray-600 disabled:cursor-not-allowed transition-colors"><EditIcon className="h-5 w-5" /></button>
+                                        <button onClick={() => asset && onAnimate(asset)} disabled={!isGenerated || isProcessing} className="p-2 rounded-full text-[var(--text-secondary)] hover:text-purple-400 disabled:text-gray-600 disabled:cursor-not-allowed transition-colors"><AnimateIcon className="h-5 w-5" /></button>
                                     </>
                                 )}
                             </div>

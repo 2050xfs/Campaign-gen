@@ -1,148 +1,160 @@
 
 import { GoogleGenAI, Modality, Type } from "@google/genai";
-import { ImageFile, AssetIdea, GenerateInput } from "../types";
+import { ImageFile, AssetIdea, GenerateInput, GuidedBrief, GenerationResult } from "../types";
 import { fileToBase64 } from "../utils/fileUtils";
 import { v4 as uuidv4 } from 'uuid';
 
-const MAX_IDEAS_PER_BATCH = 20;
+const IDEAS_PER_BATCH = 4;
 
 // Helper to safely parse JSON from a model's response
-const parseJsonResponse = (jsonString: string): any => {
+const parseJsonResponse = (responseString: string): any => {
     try {
-        const cleanedString = jsonString.trim().replace(/^```json\s*|```\s*$/g, '');
-        return JSON.parse(cleanedString);
+        const markdownMatch = responseString.match(/```json\s*([\s\S]*?)\s*```/);
+        if (markdownMatch && markdownMatch[1]) {
+            return JSON.parse(markdownMatch[1]);
+        }
+        const jsonMatch = responseString.match(/(\[[\s\S]*\]|\{[\s\S]*\})/);
+        if (jsonMatch && jsonMatch[0]) {
+            return JSON.parse(jsonMatch[0]);
+        }
+        return JSON.parse(responseString);
     } catch (e) {
-        console.error("Failed to parse JSON:", jsonString);
+        console.error("Failed to parse JSON from response:", responseString);
         throw new Error("The model returned an invalid format. Please try again.");
     }
 };
 
 const getAiClient = () => {
-    // FIX: Per coding guidelines, the API key must be sourced exclusively from
-    // process.env.API_KEY without any fallback or placeholder logic.
     return new GoogleGenAI({ apiKey: process.env.API_KEY });
 };
 
-const ideasSchema = {
-    type: Type.ARRAY,
-    items: {
-        type: Type.OBJECT,
-        properties: {
-            section: { type: Type.STRING, description: "A short, descriptive name for the UI section or component (e.g., 'Hero Section Banner', 'Testimonial Card')." },
-            description: { type: Type.STRING, description: "A one-sentence summary of the asset's purpose and visual style." },
-            prompt: { type: Type.STRING, description: "A detailed, studio-quality image generation prompt for this asset." },
-            animationPrompt: { type: Type.STRING, description: "A creative prompt for a subtle, professional animation (e.g., 'Subtle fade-in and upward drift')." }
+const fullResponseSchema = {
+    type: Type.OBJECT,
+    properties: {
+        analysis: {
+            type: Type.OBJECT,
+            properties: {
+                score: { type: Type.INTEGER, description: "A score from 1-100 rating the current design aesthetic or brief potential." },
+                detectedStyle: { type: Type.STRING, description: "The dominant visual style detected (e.g., 'Minimalist', 'Brutalist')." },
+                colorPalette: { type: Type.ARRAY, items: { type: Type.STRING }, description: "Hex codes of the 5 dominant colors." },
+                critique: { type: Type.STRING, description: "A 2-sentence professional design critique highlighting strengths and weaknesses." },
+                suggestions: { type: Type.ARRAY, items: { type: Type.STRING }, description: "3 specific, actionable bullet points to improve the design." }
+            },
+            required: ["score", "detectedStyle", "colorPalette", "critique", "suggestions"]
         },
-        required: ["section", "description", "prompt", "animationPrompt"]
+        ideas: {
+            type: Type.ARRAY,
+            items: {
+                type: Type.OBJECT,
+                properties: {
+                    section: { type: Type.STRING, description: "A short, descriptive name for the UI section or component." },
+                    description: { type: Type.STRING, description: "A one-sentence summary of the asset's purpose and visual style." },
+                    prompt: { type: Type.STRING, description: "A detailed, studio-quality image generation prompt for this asset." },
+                    animationPrompt: { type: Type.STRING, description: "A creative prompt for a subtle, professional animation." }
+                },
+                required: ["section", "description", "prompt", "animationPrompt"]
+            }
+        }
+    },
+    required: ["analysis", "ideas"]
+};
+
+const constructPromptFromBrief = (brief: GuidedBrief): string => {
+    let briefText = `\n--- Creative Brief ---\n`;
+    if (brief.instructions) briefText += `Primary Goal: ${brief.instructions}\n`;
+    if (brief.keywords) briefText += `Brand Keywords: ${brief.keywords}\n`;
+    if (brief.styles.length > 0) briefText += `Visual Styles: ${brief.styles.join(', ')}\n`;
+    if (brief.colors.length > 0) briefText += `Color Palette: ${brief.colors.join(', ')}\n`;
+    briefText += `----------------------\n`;
+    return briefText;
+};
+
+const generateContent = async (contents: any, schema: any, tools: any[] = []): Promise<GenerationResult> => {
+    const ai = getAiClient();
+    const response = await ai.models.generateContent({
+        model: "gemini-3-pro-preview",
+        contents: contents,
+        config: { 
+            responseMimeType: "application/json", 
+            responseSchema: schema,
+            tools: tools.length > 0 ? tools : undefined
+        }
+    });
+    const result = parseJsonResponse(response.text);
+    return {
+        analysis: result.analysis,
+        ideas: result.ideas.map((idea: any) => ({ ...idea, id: uuidv4() }))
+    };
+};
+
+export const generateAssetIdeas = async (input: GenerateInput, existingIdeasCount: number): Promise<GenerationResult> => {
+    const briefText = constructPromptFromBrief(input.brief);
+    
+    const basePrompt = `
+        You are a world-class "Digital Feng Shui" Master and Creative Director. 
+        Your goal is to analyze the input, provide a "Design Audit", and then generate specific visual assets to improve the product.
+        
+        Step 1: Analyze the input (Brief, Image, or URL). Determine the current vibe, flaws, and opportunities. Assign a "Feng Shui Score" (1-100).
+        Step 2: Generate ${IDEAS_PER_BATCH} distinct, high-quality visual asset ideas that solve the problems identified or enhance the brief.
+        
+        ${briefText}
+        Current idea count: ${existingIdeasCount} (If > 0, ensure new ideas are unique).
+    `;
+
+    if (input.type === 'text') {
+        return generateContent(basePrompt, fullResponseSchema);
+    } else if (input.type === 'file') {
+        const imageFile = await fileToBase64(input.file);
+        return generateContent(
+            { parts: [{ inlineData: { data: imageFile.base64, mimeType: imageFile.mimeType } }, { text: basePrompt }] },
+            fullResponseSchema
+        );
+    } else if (input.type === 'url') {
+        const urlPrompt = `
+            ${basePrompt}
+            Target URL: ${input.url}
+            First, browse the URL to understand its design language. Then perform the audit and generation.
+        `;
+        return generateContent(urlPrompt, fullResponseSchema, [{ googleSearch: {} }]);
     }
-};
-
-const generateAssetIdeasFromText = async (brief: string, existingIdeasCount: number): Promise<AssetIdea[]> => {
-    const ai = getAiClient();
-    const prompt = `
-        You are a creative director for a top-tier web design agency.
-        Based on the following application brief, generate a list of ${MAX_IDEAS_PER_BATCH} creative, diverse, and studio-quality visual assets.
-        For each asset, provide a section name, a short description, a detailed image generation prompt, and a subtle animation prompt.
-        If this is not the first batch of ideas (current count > 0), ensure the new ideas are distinct from what might have been generated before.
-
-        Application Brief: "${brief}"
-        Current idea count: ${existingIdeasCount}
-    `;
-
-    const response = await ai.models.generateContent({
-        model: "gemini-2.5-pro",
-        contents: prompt,
-        config: { responseMimeType: "application/json", responseSchema: ideasSchema }
-    });
-
-    const result = parseJsonResponse(response.text);
-    return result.map((idea: any) => ({ ...idea, id: uuidv4() }));
-};
-
-const generateAssetIdeasFromImage = async (image: ImageFile, tips: string, existingIdeasCount: number): Promise<AssetIdea[]> => {
-    const ai = getAiClient();
-    const prompt = `
-        You are a creative director for a top-tier web design agency.
-        Analyze the provided website screenshot. Based on its design, layout, and content, generate a list of ${MAX_IDEAS_PER_BATCH} NEW and IMPROVED studio-quality visual assets that would enhance this page. Do not just describe what's there; invent better assets.
-        Prioritize the user's creative brief if provided.
-        For each asset, provide a section name, description, a detailed image generation prompt, and a subtle animation prompt.
-        If this is not the first batch (current count > 0), ensure the new ideas are distinct.
-
-        User's Creative Brief: "${tips || 'No specific brief provided. Use your expertise.'}"
-        Current idea count: ${existingIdeasCount}
-    `;
-
-    const response = await ai.models.generateContent({
-        model: "gemini-2.5-pro",
-        contents: { parts: [{ inlineData: { data: image.base64, mimeType: image.mimeType } }, { text: prompt }] },
-        config: { responseMimeType: "application/json", responseSchema: ideasSchema }
-    });
-
-    const result = parseJsonResponse(response.text);
-    return result.map((idea: any) => ({ ...idea, id: uuidv4() }));
-};
-
-const generateAssetIdeasFromUrl = async (url: string, existingIdeasCount: number): Promise<AssetIdea[]> => {
-    const ai = getAiClient();
-    const prompt = `
-        You are a creative director for a top-tier web design agency.
-        Access and analyze the content of the website at this URL: ${url}.
-        Based on its purpose, audience, and tone, generate a list of ${MAX_IDEAS_PER_BATCH} creative, NEW, and studio-quality visual assets to enhance the site.
-        For each asset, provide a section name, description, a detailed image generation prompt, and a subtle animation prompt.
-        If this is not the first batch (current count > 0), ensure the new ideas are distinct.
-        Return your response ONLY as a valid JSON array matching the provided schema. Do not include any other text or markdown.
-    `;
-
-    const response = await ai.models.generateContent({
-        model: "gemini-2.5-pro",
-        contents: prompt,
-        config: { tools: [{ googleSearch: {} }] }
-    });
-
-    const result = parseJsonResponse(response.text);
-    return result.map((idea: any) => ({ ...idea, id: uuidv4() }));
-};
-
-export const generateAssetIdeas = async (input: GenerateInput, existingIdeasCount: number): Promise<AssetIdea[]> => {
-    switch (input.type) {
-        case 'text':
-            return generateAssetIdeasFromText(input.value, existingIdeasCount);
-        case 'url':
-            return generateAssetIdeasFromUrl(input.url, existingIdeasCount);
-        case 'file':
-            const imageFile = await fileToBase64(input.file);
-            return generateAssetIdeasFromImage(imageFile, input.tips || '', existingIdeasCount);
-        default:
-            throw new Error('Invalid input type for asset generation.');
-    }
+    
+    throw new Error('Invalid input type');
 };
 
 export const generateSingleAsset = async (prompt: string): Promise<ImageFile> => {
     const ai = getAiClient();
-    const response = await ai.models.generateImages({
-        model: 'imagen-4.0-generate-001',
-        prompt: prompt,
-        config: { numberOfImages: 1, outputMimeType: 'image/png', aspectRatio: '1:1' }
-    });
-    if (!response.generatedImages || response.generatedImages.length === 0) {
-        throw new Error("No images were generated.");
-    }
-    const base64ImageBytes = response.generatedImages[0].image.imageBytes;
-    return { base64: base64ImageBytes, mimeType: 'image/png' };
-};
-
-export const editImage = async (image: ImageFile, prompt: string): Promise<ImageFile> => {
-    const ai = getAiClient();
     const response = await ai.models.generateContent({
         model: 'gemini-2.5-flash-image',
-        contents: { parts: [{ inlineData: { data: image.base64, mimeType: image.mimeType } }, { text: prompt }] },
-        config: { responseModalities: [Modality.IMAGE] }
+        contents: { parts: [{ text: prompt }] },
+        config: {
+            imageConfig: { aspectRatio: "1:1" }
+        },
     });
     for (const part of response.candidates[0].content.parts) {
+      if (part.inlineData) {
+        return { base64: part.inlineData.data, mimeType: part.inlineData.mimeType || 'image/png' };
+      }
+    }
+    throw new Error("No image was generated in the response.");
+};
+
+export const editImage = async (image: ImageFile, prompt: string, editImageFile?: ImageFile | null): Promise<ImageFile> => {
+    const ai = getAiClient();
+    const parts: any[] = [{ inlineData: { data: image.base64, mimeType: image.mimeType } }];
+    if (editImageFile) {
+        parts.push({ inlineData: { data: editImageFile.base64, mimeType: editImageFile.mimeType } });
+    }
+    const finalPrompt = prompt || "Enhance this image based on the visual style.";
+    parts.push({ text: finalPrompt });
+
+    const response = await ai.models.generateContent({
+        model: 'gemini-2.5-flash-image',
+        contents: { parts: parts },
+    });
+    
+    for (const part of response.candidates[0].content.parts) {
         if (part.inlineData) {
-            const base64ImageBytes = part.inlineData.data;
-            const mimeType = part.inlineData.mimeType || 'image/png';
-            return { base64: base64ImageBytes, mimeType };
+            return { base64: part.inlineData.data, mimeType: part.inlineData.mimeType || 'image/png' };
         }
     }
     throw new Error("No edited image was returned.");
@@ -152,7 +164,6 @@ export const animateImage = async (image: ImageFile, prompt: string): Promise<st
     if (window.aistudio && !(await window.aistudio.hasSelectedApiKey())) {
         await window.aistudio.openSelectKey();
     }
-
     const freshAi = getAiClient();
     let operation = await freshAi.models.generateVideos({
         model: 'veo-3.1-fast-generate-preview',
@@ -160,21 +171,26 @@ export const animateImage = async (image: ImageFile, prompt: string): Promise<st
         image: { imageBytes: image.base64, mimeType: image.mimeType },
         config: { numberOfVideos: 1, resolution: '720p', aspectRatio: '16:9' }
     });
+    
     while (!operation.done) {
-        await new Promise(resolve => setTimeout(resolve, 10000));
+        await new Promise(resolve => setTimeout(resolve, 5000));
         operation = await freshAi.operations.getVideosOperation({ operation });
     }
+    
     if (operation.error) {
-        if (operation.error.message.includes("Requested entity was not found.")) {
-             if (window.aistudio) await window.aistudio.openSelectKey();
-             throw new Error("API Key error. Please select your key and try again.");
+         if (operation.error.message.includes("Requested entity was not found") && window.aistudio) {
+             await window.aistudio.openSelectKey();
+             throw new Error("API Key session expired. Please re-select your key.");
         }
         throw new Error(`Video generation failed: ${operation.error.message}`);
     }
+    
     const downloadLink = operation.response?.generatedVideos?.[0]?.video?.uri;
-    if (!downloadLink) throw new Error("Video generation completed, but no download link was found.");
+    if (!downloadLink) throw new Error("No download link found.");
+    
     const videoResponse = await fetch(`${downloadLink}&key=${process.env.API_KEY}`);
-    if (!videoResponse.ok) throw new Error(`Failed to fetch video. Status: ${videoResponse.statusText}`);
+    if (!videoResponse.ok) throw new Error(`Failed to fetch video: ${videoResponse.statusText}`);
+    
     const videoBlob = await videoResponse.blob();
     return URL.createObjectURL(videoBlob);
 };
